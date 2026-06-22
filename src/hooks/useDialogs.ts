@@ -1,22 +1,18 @@
-import { useCallbackRef } from './useCallbackRef';
 import { useEffect, useRef, useState } from 'react';
-import { NewMessage } from 'telegram/events';
-import { useTelegram } from '@/context/TelegramContext';
-import { fetchDialogs } from '@/lib/telegram/dialogs';
+import { api, onRealtimeMessage } from '@/lib/api';
+import { useCallbackRef } from './useCallbackRef';
 import type { NormalizedDialog } from '@/lib/telegram/types';
 
 /** Live list of dialogs, refreshed (debounced) when new messages arrive. */
 export function useDialogs() {
-  const { client } = useTelegram();
   const [dialogs, setDialogs] = useState<NormalizedDialog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const debounceRef = useRef<number>();
+  const debounce = useRef<number>();
 
   const refresh = useCallbackRef(async () => {
-    if (!client) return;
     try {
-      const list = await fetchDialogs(client);
+      const list = await api.dialogs();
       setDialogs(list);
       setError(null);
     } catch (e) {
@@ -27,25 +23,17 @@ export function useDialogs() {
   });
 
   useEffect(() => {
-    if (!client) return;
     setLoading(true);
     void refresh();
-
-    const event = new NewMessage({});
-    const handler = () => {
-      window.clearTimeout(debounceRef.current);
-      debounceRef.current = window.setTimeout(() => void refresh(), 600);
-    };
-    client.addEventHandler(handler, event);
+    const unsub = onRealtimeMessage(() => {
+      window.clearTimeout(debounce.current);
+      debounce.current = window.setTimeout(() => void refresh(), 500);
+    });
     return () => {
-      window.clearTimeout(debounceRef.current);
-      try {
-        client.removeEventHandler(handler, event);
-      } catch {
-        /* ignore */
-      }
+      window.clearTimeout(debounce.current);
+      unsub();
     };
-  }, [client, refresh]);
+  }, [refresh]);
 
   return { dialogs, loading, error, refresh };
 }

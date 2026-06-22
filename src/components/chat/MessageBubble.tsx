@@ -2,7 +2,7 @@ import { useState, type MouseEvent } from 'react';
 import type { NormalizedMessage } from '@/lib/telegram/types';
 import { cn, formatTime } from '@/lib/telegram/format';
 import { Ticks } from '@/components/common/Ticks';
-import { EditIcon, ForwardIcon, ReplyIcon, TrashIcon } from '@/components/common/Icon';
+import { ReplyIcon } from '@/components/common/Icon';
 import { ContextMenu, type MenuItem } from './ContextMenu';
 import { MessageMedia } from './MessageMedia';
 
@@ -12,23 +12,9 @@ interface Props {
   showSenderName: boolean;
   isTail: boolean;
   onReply: (m: NormalizedMessage) => void;
-  onEdit: (m: NormalizedMessage) => void;
-  onDelete: (m: NormalizedMessage) => void;
-  onForward: (m: NormalizedMessage) => void;
-  onPressButton: (m: NormalizedMessage, dataBase64: string) => void;
 }
 
-export function MessageBubble({
-  message,
-  isGroup,
-  showSenderName,
-  isTail,
-  onReply,
-  onEdit,
-  onDelete,
-  onForward,
-  onPressButton,
-}: Props) {
+export function MessageBubble({ message, isGroup, showSenderName, isTail, onReply }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const isOwn = message.out;
 
@@ -47,14 +33,7 @@ export function MessageBubble({
 
   const items: MenuItem[] = [
     { label: 'Reply', icon: <ReplyIcon width={18} height={18} />, onClick: () => onReply(message) },
-    { label: 'Forward', icon: <ForwardIcon width={18} height={18} />, onClick: () => onForward(message) },
-    ...(isOwn && message.text
-      ? [{ label: 'Edit', icon: <EditIcon width={18} height={18} />, onClick: () => onEdit(message) }]
-      : []),
-    ...(message.text
-      ? [{ label: 'Copy Text', onClick: () => void navigator.clipboard?.writeText(message.text) }]
-      : []),
-    { label: 'Delete', icon: <TrashIcon width={18} height={18} />, danger: true, onClick: () => onDelete(message) },
+    ...(message.text ? [{ label: 'Copy Text', onClick: () => void navigator.clipboard?.writeText(message.text) }] : []),
   ];
 
   return (
@@ -97,7 +76,7 @@ export function MessageBubble({
           </span>
         </div>
 
-        {/* Inline keyboard (bot messages) */}
+        {/* Inline keyboard (read-only rendering; URL buttons open) */}
         {message.buttons && message.buttons.length > 0 && (
           <div className="mt-1 w-full max-w-sm space-y-1">
             {message.buttons.map((row, ri) => (
@@ -105,10 +84,7 @@ export function MessageBubble({
                 {row.map((b, bi) => (
                   <button
                     key={bi}
-                    onClick={() => {
-                      if (b.kind === 'url' && b.url) window.open(b.url, '_blank', 'noreferrer');
-                      else if (b.kind === 'callback' && b.data) onPressButton(message, b.data);
-                    }}
+                    onClick={() => b.kind === 'url' && b.url && window.open(b.url, '_blank', 'noreferrer')}
                     className="flex-1 rounded-lg bg-black/10 px-3 py-2 text-center text-sm font-medium transition-colors hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20"
                   >
                     {b.text}

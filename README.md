@@ -1,111 +1,105 @@
-# Telegram Web (MTProto / GramJS)
+# Telegram Web (real MTProto, server + client)
 
-A Telegram Web client built on Telegram's **official MTProto API** via **[GramJS](https://gram.js.org/)** — not the Bot API for user sessions. It connects to **real Telegram servers**: no mock data.
+A Telegram Web client that connects to **real Telegram servers** using the official **MTProto API** (via [GramJS](https://gram.js.org/)).
 
-- 🔐 Real user authentication: phone number → login code → 2FA password (SRP)
-- 🤖 **Login as Bot** using a Bot API token (separate mode + bot dashboard)
-- 💬 Real dialogs, messages, sending, and live updates
+It's split into two parts so it's **fast** and so users log in with **just a phone number** (the API key stays hidden on the server, exactly like the official Telegram Web):
+
+```
+┌──────────────┐     /api + /ws      ┌──────────────────────┐     MTProto      ┌──────────────┐
+│  React app   │  ───────────────▶   │  Node server (GramJS) │  ─────────────▶  │   Telegram   │
+│ (browser)    │  ◀───────────────   │  holds api_id/api_hash │  ◀────────────   │   servers    │
+└──────────────┘                     └──────────────────────┘                  └──────────────┘
+```
+
+- 🔐 **Phone-only login** (code + 2FA) with a **country-code selector** — no API key prompt
+- ⚡ **Fast**: heavy MTProto runs on the server; the browser bundle is small
+- 💬 Real chats, messages, sending, media, and **live updates** over WebSocket
+- 🤖 Optional **bot login** via BotFather token
 - 🌑 Telegram-style **dark theme** by default
-- 💾 Session persistence via IndexedDB (you stay logged in)
 
-> ⚠️ **You must supply your own Telegram API credentials** (`api_id` / `api_hash`). See setup below.
+> Why two parts? Running MTProto **inside the browser** (the old approach) made the bundle huge and the
+> login slow/unreliable, and it forced each user to paste an API key. Moving Telegram to a small server
+> fixes all of that.
 
 ---
 
-## 1. Get your API credentials
+## Quick start (single server — recommended for hosting)
 
-1. Visit **https://my.telegram.org** and sign in with your phone number.
-2. Open **API development tools**.
-3. Create an app (any title / short name). You will receive:
-   - **`api_id`** — a number
-   - **`api_hash`** — a 32-character hex string
-
-## 2. Provide your API key
-
-You have **two options**:
-
-**Option A — enter it in the app (easiest):** just run the app (step 3) and paste your
-`api_id` / `api_hash` on the welcome screen. They're saved in your browser
-(localStorage) and used immediately — no file editing or rebuild needed. You can
-change them later via “Use a different API key” on the login screen.
-
-**Option B — use a `.env` file:**
+This is the setup for running everything on one machine/port (e.g. your VPS on port 8000).
 
 ```bash
+# 1) Get your Telegram API credentials (once) from https://my.telegram.org -> API development tools
+#    You'll get an api_id (number) and api_hash (hex string).
+
+# 2) Configure the server
+cd server
 cp .env.example .env
+#   edit .env:  TELEGRAM_API_ID=...   TELEGRAM_API_HASH=...   PORT=8000
+npm install
+
+# 3) Build the frontend (from the repo root)
+cd ..
+npm install
+npm run build         # outputs ./dist , which the server serves
+
+# 4) Start the server (serves the app + API on PORT)
+cd server
+npm start
 ```
 
-Edit `.env`:
+Open `http://YOUR_SERVER_IP:8000`. Log in with your phone number → enter the code Telegram sends → (2FA password if enabled).
 
-```env
-VITE_TELEGRAM_API_ID=1234567
-VITE_TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef
-```
+> Tip: run the server under a process manager (pm2/systemd) and ideally behind HTTPS.
 
-In-app credentials (Option A) take precedence over `.env` when both are present.
+---
 
-## 3. Install & run
+## Local development (two terminals, hot reload)
 
 ```bash
+# Terminal 1 — backend on :8000
+cd server
+cp .env.example .env        # set TELEGRAM_API_ID / TELEGRAM_API_HASH
+npm install
+npm run dev
+
+# Terminal 2 — frontend on :5173 (proxies /api and /ws to :8000)
 npm install
 npm run dev
 ```
 
-Open the printed URL (default http://localhost:5173).
+Open `http://localhost:5173`.
 
 ---
 
-## Logging in
-
-### As a user
-1. Enter your phone number in international format (e.g. `+14155550123`).
-2. Telegram sends a login code (in the Telegram app or via SMS). Enter it.
-3. If you have **Two-Step Verification** enabled, enter your password — it's verified locally using SRP and never sent in plaintext.
-
-### As a bot
-1. Switch to the **Login as Bot** tab.
-2. Paste a bot token from [@BotFather](https://t.me/BotFather) (e.g. `123456:ABC-DEF...`).
-3. You'll land on the **Bot Dashboard**: bot info, incoming updates, and the ability to reply, including rendering inline keyboards and handling callback queries.
-
-You can switch between accounts from the account menu; each session is cached separately in IndexedDB.
-
----
-
-## How it works
+## Project layout
 
 ```
-src/
-├── lib/telegram/
-│   ├── client.ts      # GramJS TelegramClient factory + connection lifecycle
-│   ├── session.ts     # IndexedDB-backed StringSession persistence
-│   ├── auth.ts        # sendCode / signIn / 2FA (SRP) / bot login / logout
-│   ├── dialogs.ts     # fetch + normalize dialogs (chats, groups, channels)
-│   ├── messages.ts    # fetch/send messages, media download, ticks
-│   └── format.ts      # presence, time, entity helpers
-├── context/
-│   ├── TelegramContext.tsx  # client + account state + login methods
-│   └── ThemeContext.tsx     # dark-by-default theme
-├── components/
-│   ├── auth/          # LoginPanel (phone/code/2FA) + BotLogin tab
-│   ├── sidebar/       # DialogList, DialogItem, SearchBar, archived toggle
-│   ├── chat/          # ChatView, MessageList, MessageBubble, Composer, ticks
-│   ├── bot/           # BotDashboard, inline keyboards, callback handling
-│   └── common/        # Avatar, Icon, Spinner
-└── hooks/             # useDialogs, useMessages, useUpdates
+.
+├── server/                 # Node + Express + GramJS (the MTProto brain)
+│   ├── src/index.mjs       # REST + WebSocket API, serves the built frontend
+│   ├── src/telegram.mjs    # client/session management, auth, dialogs, messages, media
+│   └── .env.example        # TELEGRAM_API_ID / TELEGRAM_API_HASH / PORT
+└── src/                    # React frontend (thin client)
+    ├── lib/api.ts          # fetch + WebSocket client to the backend
+    ├── context/            # Telegram (auth/session) + Theme providers
+    ├── hooks/              # useDialogs / useMessages / useAvatar
+    └── components/         # auth (phone login + country picker), sidebar, chat, common
 ```
 
-The UI talks only to the GramJS client; all data is fetched live from Telegram.
+### How auth works
+1. Browser → `POST /api/auth/send-code { phone }` → server asks Telegram for a code, returns a session token.
+2. Browser → `POST /api/auth/confirm-code { code }` → on success the server stores the MTProto session; the browser keeps only the opaque token in `localStorage` (so you stay logged in).
+3. If 2FA is on → `POST /api/auth/password { password }` (verified via SRP on the server).
+
+The `api_id`/`api_hash` never leave the server.
 
 ---
 
-## Notes, limits & gotchas
+## Features & current limits
 
-- **Browser MTProto**: GramJS connects over WebSocket. Node primitives (`Buffer`, `process`) are polyfilled via `vite-plugin-node-polyfills`.
-- **Rate limits**: Telegram returns `FLOOD_WAIT_X` errors; the client surfaces the wait time and the UI shows a friendly message. Don't spam the login endpoint.
-- **`api_id`/`api_hash`** live in the client bundle (unavoidable for any web client). Use credentials you're comfortable exposing; protect your 2FA password.
-- **Voice/video message recording** is presented as UI only (browser recording is out of scope); receiving/playing media works via the API.
-- **Stickers/GIFs**: emoji picker is fully functional; sticker/GIF panels are scaffolded against the API and documented inline where they need further wiring.
-- This is an educational client. Respect Telegram's [Terms of Service](https://telegram.org/tos) and API rules.
+**Working:** phone login (+ country selector), 2FA, bot-token login, dialog list (chats/groups/channels), open chat, message history, send text, reply, read receipts/ticks, avatars, media preview/download (photos/video/voice/documents), real-time incoming messages, dark/light theme.
+
+**Not yet wired (server endpoints pending):** editing/deleting/forwarding messages, sending files, typing indicators, inline-button callbacks, and a full bot dashboard. Inline keyboards are rendered read-only (URL buttons open).
 
 ---
 
@@ -113,8 +107,10 @@ The UI talks only to the GramJS client; all data is fetched live from Telegram.
 
 | Problem | Fix |
 |--------|-----|
-| `API_ID_INVALID` | Double-check `.env` values and restart `npm run dev`. |
-| Stuck "Connecting…" | Check network/WebSocket access; some networks block Telegram DCs. |
-| `PHONE_CODE_INVALID` | Re-request the code; codes expire quickly. |
-| `SESSION_PASSWORD_NEEDED` | Expected — it means 2FA is on; enter your password. |
-| Reset everything | Clear the site's IndexedDB (`telegram-web` database) and reload. |
+| “Server setup needed” screen | Set `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` in `server/.env` and restart the server. |
+| “Can't reach the server” | Make sure the Node server is running and reachable on its port. |
+| Login code never arrives | Check the phone number/country code; codes expire fast — request again. |
+| `PASSWORD_NEEDED` | Expected — your account has 2FA; enter your password. |
+| Reset login | Log out in the app, or delete `server/data/sessions.json` on the server. |
+
+This is an educational client — please respect Telegram's [Terms of Service](https://telegram.org/tos).

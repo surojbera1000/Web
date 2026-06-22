@@ -16,3 +16,7 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+
+# Server runtime data (persisted Telegram sessions)
+server/data/
+server/node_modules/

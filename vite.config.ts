@@ -1,32 +1,22 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import path from 'node:path';
 
-// GramJS expects a handful of Node primitives (Buffer, process, crypto-ish
-// globals). vite-plugin-node-polyfills shims them for the browser build.
+// The frontend is a thin client: it talks to the backend (server/) over
+// /api and /ws. In dev we proxy those to the local backend on :8000.
 export default defineConfig({
-  plugins: [
-    react(),
-    nodePolyfills({
-      globals: { Buffer: true, global: true, process: true },
-      protocolImports: true,
-    }),
-  ],
+  plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
-  define: {
-    // Some GramJS internals reference `global`.
-    global: 'globalThis',
-  },
   server: {
     port: 5173,
     host: true,
-  },
-  build: {
-    target: 'esnext',
+    proxy: {
+      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+      '/ws': { target: 'ws://localhost:8000', ws: true },
+    },
   },
 });

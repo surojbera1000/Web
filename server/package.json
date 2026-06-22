@@ -1,0 +1,18 @@
+{
+  "name": "telegram-web-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Node + GramJS backend for the Telegram web client. Holds api_id/api_hash, talks MTProto to Telegram, and exposes a small REST + WebSocket API to the frontend.",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "dev": "node --watch src/index.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "telegram": "^2.22.2",
+    "ws": "^8.18.0"
+  }
+}

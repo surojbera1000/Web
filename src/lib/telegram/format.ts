@@ -1,5 +1,3 @@
-import { Api } from 'telegram';
-
 export function cn(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ');
 }
@@ -78,31 +76,7 @@ export function formatDuration(totalSeconds: number): string {
   return `${Math.floor(s / 60)}:${pad(s % 60)}`;
 }
 
-/** Build a presence label + online flag from an Api.User status. */
-export function presenceFromStatus(status?: Api.TypeUserStatus): {
-  online: boolean;
-  label: string;
-} {
-  if (!status) return { online: false, label: 'last seen recently' };
-  if (status instanceof Api.UserStatusOnline) return { online: true, label: 'online' };
-  if (status instanceof Api.UserStatusOffline) {
-    const was = status.wasOnline ? status.wasOnline * 1000 : 0;
-    if (!was) return { online: false, label: 'last seen recently' };
-    const diff = Date.now() - was;
-    const mins = Math.floor(diff / 60_000);
-    if (mins < 1) return { online: false, label: 'last seen just now' };
-    if (mins < 60) return { online: false, label: `last seen ${mins} min ago` };
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return { online: false, label: `last seen ${hours}h ago` };
-    return { online: false, label: `last seen ${new Date(was).toLocaleDateString()}` };
-  }
-  if (status instanceof Api.UserStatusRecently) return { online: false, label: 'last seen recently' };
-  if (status instanceof Api.UserStatusLastWeek) return { online: false, label: 'last seen within a week' };
-  if (status instanceof Api.UserStatusLastMonth) return { online: false, label: 'last seen within a month' };
-  return { online: false, label: 'last seen a long time ago' };
-}
-
-/** Safely stringify a GramJS BigInteger-ish id. */
+/** Safely stringify an id value. */
 export function idToString(id: unknown): string {
   if (id === null || id === undefined) return '';
   return String(id);

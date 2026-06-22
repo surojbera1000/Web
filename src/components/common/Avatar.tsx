@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { avatarGradient, cn, initials } from '@/lib/telegram/format';
 
 interface AvatarProps {
@@ -11,10 +12,23 @@ interface AvatarProps {
 
 export function Avatar({ name, src, size = 48, online = false, showStatus = false, className }: AvatarProps) {
   const dim = { width: size, height: size };
+  const [errored, setErrored] = useState(false);
+
+  // Reset error state when the src changes (e.g. switching chats).
+  useEffect(() => setErrored(false), [src]);
+
+  const showImg = src && !errored;
+
   return (
     <div className={cn('relative shrink-0', className)} style={dim}>
-      {src ? (
-        <img src={src} alt={name} className="h-full w-full rounded-full object-cover" style={dim} />
+      {showImg ? (
+        <img
+          src={src}
+          alt={name}
+          onError={() => setErrored(true)}
+          className="h-full w-full rounded-full object-cover"
+          style={dim}
+        />
       ) : (
         <div
           className={cn(
