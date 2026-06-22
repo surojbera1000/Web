@@ -9,7 +9,7 @@ type Tab = 'user' | 'bot';
 type Step = 'phone' | 'code' | 'password';
 
 export function LoginPanel() {
-  const { loginSendCode, loginConfirmCode, loginPassword, loginBot } = useTelegram();
+  const { loginSendCode, loginConfirmCode, loginPassword, loginBot, resetCredentials } = useTelegram();
   const { theme, toggleTheme } = useTheme();
 
   const [tab, setTab] = useState<Tab>('user');
@@ -146,6 +146,14 @@ export function LoginPanel() {
         )}
 
         {error && <p className="mt-4 text-center text-sm text-red-500">{error}</p>}
+
+        <button
+          type="button"
+          onClick={() => void resetCredentials()}
+          className="mt-6 block w-full text-center text-xs text-tg-text-secondary-light hover:underline dark:text-tg-text-secondary"
+        >
+          Use a different API key
+        </button>
       </div>
     </div>
   );

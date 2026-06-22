@@ -20,7 +20,16 @@ A Telegram Web client built on Telegram's **official MTProto API** via **[GramJS
    - **`api_id`** — a number
    - **`api_hash`** — a 32-character hex string
 
-## 2. Configure the app
+## 2. Provide your API key
+
+You have **two options**:
+
+**Option A — enter it in the app (easiest):** just run the app (step 3) and paste your
+`api_id` / `api_hash` on the welcome screen. They're saved in your browser
+(localStorage) and used immediately — no file editing or rebuild needed. You can
+change them later via “Use a different API key” on the login screen.
+
+**Option B — use a `.env` file:**
 
 ```bash
 cp .env.example .env
@@ -32,6 +41,8 @@ Edit `.env`:
 VITE_TELEGRAM_API_ID=1234567
 VITE_TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef
 ```
+
+In-app credentials (Option A) take precedence over `.env` when both are present.
 
 ## 3. Install & run
 

@@ -6,17 +6,56 @@ export interface ApiCredentials {
   apiHash: string;
 }
 
-/** Read api_id / api_hash from Vite env. */
+const LS_API_ID = 'tg-api-id';
+const LS_API_HASH = 'tg-api-hash';
+
+/**
+ * Resolve api_id / api_hash. Credentials entered in the app (localStorage)
+ * take precedence; otherwise we fall back to build-time Vite env vars.
+ */
 export function getApiCredentials(): ApiCredentials {
-  const apiId = Number(import.meta.env.VITE_TELEGRAM_API_ID ?? 0);
-  const apiHash = String(import.meta.env.VITE_TELEGRAM_API_HASH ?? '');
+  let storedId = '';
+  let storedHash = '';
+  try {
+    storedId = localStorage.getItem(LS_API_ID) ?? '';
+    storedHash = localStorage.getItem(LS_API_HASH) ?? '';
+  } catch {
+    /* localStorage may be unavailable */
+  }
+  const apiId = Number(storedId || import.meta.env.VITE_TELEGRAM_API_ID || 0);
+  const apiHash = String(storedHash || import.meta.env.VITE_TELEGRAM_API_HASH || '');
   return { apiId, apiHash };
+}
+
+/** Validate a candidate api_id / api_hash pair. */
+export function areCredentialsValid(apiId: number, apiHash: string): boolean {
+  return Number.isFinite(apiId) && apiId > 0 && /^[a-f0-9]{20,}$/i.test(apiHash.trim());
+}
+
+/** Persist API credentials entered through the UI. */
+export function saveApiCredentials(apiId: number, apiHash: string): void {
+  try {
+    localStorage.setItem(LS_API_ID, String(apiId));
+    localStorage.setItem(LS_API_HASH, apiHash.trim());
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Remove stored API credentials (falls back to env afterwards). */
+export function clearApiCredentials(): void {
+  try {
+    localStorage.removeItem(LS_API_ID);
+    localStorage.removeItem(LS_API_HASH);
+  } catch {
+    /* ignore */
+  }
 }
 
 /** True only when both credentials are present & plausible. */
 export function isConfigured(): boolean {
   const { apiId, apiHash } = getApiCredentials();
-  return Number.isFinite(apiId) && apiId > 0 && apiHash.length >= 8;
+  return areCredentialsValid(apiId, apiHash);
 }
 
 /**

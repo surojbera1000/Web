@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { TelegramClient, Api } from 'telegram';
-import { createClient, isConfigured, serializeSession } from '@/lib/telegram/client';
+import { createClient, isConfigured, serializeSession, saveApiCredentials, clearApiCredentials } from '@/lib/telegram/client';
 import {
   PasswordNeededError,
   getMe,
@@ -66,6 +66,10 @@ interface TelegramContextValue {
   removeAccount: (id: string) => Promise<void>;
   logout: () => Promise<void>;
   beginAddAccount: () => void;
+
+  // API credentials (entered in-app)
+  configure: (apiId: number, apiHash: string) => Promise<void>;
+  resetCredentials: () => Promise<void>;
 }
 
 const TelegramContext = createContext<TelegramContextValue | undefined>(undefined);
@@ -301,6 +305,33 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
     }
   }, [account, connectClient, refreshAccounts, switchAccount, teardownClient]);
 
+  // ---- API credentials entered through the UI ----
+  const configure = useCallback(
+    async (apiId: number, apiHash: string) => {
+      saveApiCredentials(apiId, apiHash);
+      setError(null);
+      setStatus('connecting');
+      await teardownClient();
+      try {
+        // No session yet for freshly entered credentials → go to login.
+        await connectClient('');
+        setStatus('awaiting_login');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to connect with these credentials.');
+        setStatus('error');
+      }
+    },
+    [connectClient, teardownClient],
+  );
+
+  const resetCredentials = useCallback(async () => {
+    clearApiCredentials();
+    await teardownClient();
+    await setActiveAccountId(null);
+    setAccount(null);
+    setStatus('unconfigured');
+  }, [teardownClient]);
+
   const value = useMemo<TelegramContextValue>(
     () => ({
       status,
@@ -316,6 +347,8 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
       removeAccount,
       logout,
       beginAddAccount,
+      configure,
+      resetCredentials,
     }),
     [
       status,
@@ -330,6 +363,8 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
       removeAccount,
       logout,
       beginAddAccount,
+      configure,
+      resetCredentials,
     ],
   );
 
