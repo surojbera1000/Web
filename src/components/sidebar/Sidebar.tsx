@@ -1,239 +1,101 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { useChat } from '@/context/ChatContext';
-import { Avatar } from '@/components/common/Avatar';
-import { ComposeIcon, MenuIcon, UsersIcon } from '@/components/common/Icon';
-import { formatLastSeen } from '@/lib/utils';
-import { messagePreview } from '@/lib/messagePreview';
+import { useMemo, useState } from 'react';
+import type { NormalizedDialog } from '@/lib/telegram/types';
+import { useDialogs } from '@/hooks/useDialogs';
+import { Spinner } from '@/components/common/Spinner';
+import { ArchiveIcon, BackIcon, MenuIcon } from '@/components/common/Icon';
 import { SearchBar } from './SearchBar';
-import { SideMenu } from './SideMenu';
-import { ChatListItem } from './ChatListItem';
+import { AccountMenu } from './AccountMenu';
+import { DialogItem } from './DialogItem';
 
-interface SidebarProps {
-  onNewGroup: () => void;
-  onOpenProfile: () => void;
-}
-
-export function Sidebar({ onNewGroup, onOpenProfile }: SidebarProps) {
-  const { summaries, contacts, activeChatId, openChat, openPrivateChat } = useChat();
+export function Sidebar({
+  activeChatId,
+  onSelect,
+}: {
+  activeChatId: string | null;
+  onSelect: (dialog: NormalizedDialog) => void;
+}) {
+  const { dialogs, loading, error } = useDialogs();
   const [query, setQuery] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [newChatOpen, setNewChatOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const trimmed = query.trim().toLowerCase();
 
-  const filteredChats = useMemo(() => {
-    if (!trimmed) return summaries;
-    return summaries.filter(
-      (s) =>
-        s.displayName.toLowerCase().includes(trimmed) ||
-        messagePreview(s.lastMessage).toLowerCase().includes(trimmed),
-    );
-  }, [summaries, trimmed]);
+  const { main, archived } = useMemo(() => {
+    const m: NormalizedDialog[] = [];
+    const a: NormalizedDialog[] = [];
+    for (const d of dialogs) (d.archived ? a : m).push(d);
+    return { main: m, archived: a };
+  }, [dialogs]);
 
-  const matchedContacts = useMemo(() => {
-    if (!trimmed) return [];
-    return contacts.filter(
-      (c) =>
-        c.name.toLowerCase().includes(trimmed) || c.phone.toLowerCase().includes(trimmed),
+  const source = showArchived ? archived : main;
+  const filtered = useMemo(() => {
+    if (!trimmed) return source;
+    return source.filter(
+      (d) =>
+        d.entity.title.toLowerCase().includes(trimmed) ||
+        d.entity.username?.toLowerCase().includes(trimmed) ||
+        d.lastMessageText.toLowerCase().includes(trimmed),
     );
-  }, [contacts, trimmed]);
+  }, [source, trimmed]);
 
   return (
-    <aside className="relative flex h-full w-full flex-col bg-tg-sidebar-light dark:bg-tg-sidebar-dark">
-      {/* Header */}
+    <aside className="relative flex h-full w-full flex-col bg-tg-panel-light dark:bg-tg-panel">
       <div className="flex items-center gap-2 px-3 py-2">
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          className="rounded-full p-2 text-tg-text-secondary-light transition-colors hover:bg-tg-hover-light dark:text-tg-text-secondary-dark dark:hover:bg-tg-hover-dark"
-          aria-label="Menu"
-        >
-          <MenuIcon width={22} height={22} />
-        </button>
-        <SearchBar value={query} onChange={setQuery} />
-      </div>
-
-      <SideMenu
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        onNewGroup={onNewGroup}
-        onOpenProfile={onOpenProfile}
-      />
-
-      {/* Body */}
-      <div className="tg-scroll flex-1 overflow-y-auto">
-        {trimmed ? (
-          <SearchResults
-            chats={filteredChats}
-            contacts={matchedContacts}
-            activeChatId={activeChatId}
-            onOpenChat={(id) => {
-              openChat(id);
-              setQuery('');
-            }}
-            onOpenContact={(peerId) => {
-              void openPrivateChat(peerId);
-              setQuery('');
-            }}
-          />
+        {showArchived ? (
+          <button
+            onClick={() => setShowArchived(false)}
+            className="rounded-full p-2 text-tg-text-secondary-light hover:bg-black/5 dark:text-tg-text-secondary dark:hover:bg-white/5"
+            aria-label="Back"
+          >
+            <BackIcon width={22} height={22} />
+          </button>
         ) : (
-          <div className="py-1">
-            {summaries.length === 0 ? (
-              <EmptyState />
-            ) : (
-              filteredChats.map((s) => (
-                <ChatListItem
-                  key={s.chat.id}
-                  summary={s}
-                  active={s.chat.id === activeChatId}
-                  onClick={() => openChat(s.chat.id)}
-                />
-              ))
-            )}
-          </div>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="rounded-full p-2 text-tg-text-secondary-light hover:bg-black/5 dark:text-tg-text-secondary dark:hover:bg-white/5"
+            aria-label="Menu"
+          >
+            <MenuIcon width={22} height={22} />
+          </button>
         )}
+        <SearchBar value={query} onChange={setQuery} placeholder={showArchived ? 'Search archived' : 'Search'} />
       </div>
 
-      {/* Floating compose button */}
-      <div className="absolute bottom-5 right-5">
-        {newChatOpen && (
-          <NewChatPanel
-            onClose={() => setNewChatOpen(false)}
-            onNewGroup={() => {
-              setNewChatOpen(false);
-              onNewGroup();
-            }}
-            onPickContact={(peerId) => {
-              void openPrivateChat(peerId);
-              setNewChatOpen(false);
-            }}
-          />
+      <AccountMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+
+      <div className="tg-scroll flex-1 overflow-y-auto">
+        {!showArchived && archived.length > 0 && !trimmed && (
+          <button
+            onClick={() => setShowArchived(true)}
+            className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+          >
+            <span className="flex h-13 w-13 items-center justify-center" style={{ width: 52, height: 52 }}>
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-tg-text-secondary/30 text-tg-text-secondary-light dark:text-tg-text-secondary">
+                <ArchiveIcon width={24} height={24} />
+              </span>
+            </span>
+            <span className="flex-1 font-medium">Archived Chats</span>
+            <span className="rounded-full bg-tg-text-secondary/40 px-2 text-xs text-white">{archived.length}</span>
+          </button>
         )}
-        <button
-          onClick={() => setNewChatOpen((v) => !v)}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-tg-blue text-white shadow-lg transition-all hover:bg-tg-blue-dark active:scale-95"
-          aria-label="New chat"
-        >
-          <ComposeIcon width={24} height={24} />
-        </button>
+
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Spinner size={26} className="text-tg-blue" />
+          </div>
+        ) : error ? (
+          <p className="px-4 py-8 text-center text-sm text-red-500">{error}</p>
+        ) : filtered.length === 0 ? (
+          <p className="px-4 py-10 text-center text-sm text-tg-text-secondary-light dark:text-tg-text-secondary">
+            {trimmed ? 'Nothing found' : showArchived ? 'No archived chats' : 'No chats yet'}
+          </p>
+        ) : (
+          filtered.map((d) => (
+            <DialogItem key={d.id} dialog={d} active={d.id === activeChatId} onClick={() => onSelect(d)} />
+          ))
+        )}
       </div>
     </aside>
-  );
-}
-
-function SearchResults({
-  chats,
-  contacts,
-  activeChatId,
-  onOpenChat,
-  onOpenContact,
-}: {
-  chats: ReturnType<typeof useChat>['summaries'];
-  contacts: ReturnType<typeof useChat>['contacts'];
-  activeChatId: string | null;
-  onOpenChat: (id: string) => void;
-  onOpenContact: (peerId: string) => void;
-}) {
-  if (chats.length === 0 && contacts.length === 0) {
-    return (
-      <p className="px-4 py-8 text-center text-sm text-tg-text-secondary-light dark:text-tg-text-secondary-dark">
-        Nothing found
-      </p>
-    );
-  }
-  return (
-    <div className="py-1">
-      {chats.length > 0 && (
-        <>
-          <SectionLabel>Chats</SectionLabel>
-          {chats.map((s) => (
-            <ChatListItem
-              key={s.chat.id}
-              summary={s}
-              active={s.chat.id === activeChatId}
-              onClick={() => onOpenChat(s.chat.id)}
-            />
-          ))}
-        </>
-      )}
-      {contacts.length > 0 && (
-        <>
-          <SectionLabel>Contacts</SectionLabel>
-          {contacts.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => onOpenContact(c.id)}
-              className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-tg-hover-light dark:hover:bg-tg-hover-dark"
-            >
-              <Avatar name={c.name} src={c.avatar} size={46} online={c.online} showStatus />
-              <div className="min-w-0">
-                <p className="truncate font-medium">{c.name}</p>
-                <p className="truncate text-sm text-tg-text-secondary-light dark:text-tg-text-secondary-dark">
-                  {formatLastSeen(c.online, c.lastSeen)}
-                </p>
-              </div>
-            </button>
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
-
-function NewChatPanel({
-  onClose,
-  onNewGroup,
-  onPickContact,
-}: {
-  onClose: () => void;
-  onNewGroup: () => void;
-  onPickContact: (peerId: string) => void;
-}) {
-  const { contacts } = useChat();
-  return (
-    <>
-      <div className="fixed inset-0 z-10" onClick={onClose} />
-      <div className="absolute bottom-16 right-0 z-20 max-h-[60vh] w-72 animate-fade-in overflow-y-auto rounded-xl bg-white py-1.5 shadow-2xl ring-1 ring-black/5 dark:bg-tg-panel-dark dark:ring-white/10 tg-scroll">
-        <button
-          onClick={onNewGroup}
-          className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-tg-hover-light dark:hover:bg-tg-hover-dark"
-        >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-tg-blue text-white">
-            <UsersIcon width={18} height={18} />
-          </span>
-          New Group
-        </button>
-        <div className="my-1 h-px bg-black/5 dark:bg-white/10" />
-        <p className="px-4 py-1 text-xs font-medium uppercase text-tg-text-secondary-light dark:text-tg-text-secondary-dark">
-          Start a chat
-        </p>
-        {contacts.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => onPickContact(c.id)}
-            className="flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-tg-hover-light dark:hover:bg-tg-hover-dark"
-          >
-            <Avatar name={c.name} src={c.avatar} size={36} online={c.online} showStatus />
-            <span className="truncate text-sm">{c.name}</span>
-          </button>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <p className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-tg-text-secondary-light dark:text-tg-text-secondary-dark">
-      {children}
-    </p>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center px-6 py-16 text-center text-tg-text-secondary-light dark:text-tg-text-secondary-dark">
-      <p className="text-sm">No chats yet.</p>
-      <p className="mt-1 text-xs">Tap the compose button to start a conversation.</p>
-    </div>
   );
 }

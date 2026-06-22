@@ -1,141 +1,120 @@
-# Telegram Web Clone
+# Telegram Web (MTProto / GramJS)
 
-A feature-rich **Telegram Web** clone built with **React + TypeScript + Tailwind CSS**, with a pluggable backend: it runs **out of the box** on an in-browser mock realtime backend, and switches to **Firebase** (Phone Auth + Realtime Database) automatically when you provide credentials.
+A Telegram Web client built on Telegram's **official MTProto API** via **[GramJS](https://gram.js.org/)** — not the Bot API for user sessions. It connects to **real Telegram servers**: no mock data.
 
-> The UI closely follows Telegram's design language — sidebar chat list, message bubbles with tails, read receipts, typing indicators, dark/light themes and smooth animations.
+- 🔐 Real user authentication: phone number → login code → 2FA password (SRP)
+- 🤖 **Login as Bot** using a Bot API token (separate mode + bot dashboard)
+- 💬 Real dialogs, messages, sending, and live updates
+- 🌑 Telegram-style **dark theme** by default
+- 💾 Session persistence via IndexedDB (you stay logged in)
 
----
-
-## ✨ Features
-
-**Core**
-- 📱 Phone-number login with a verification-code step
-- 💬 Real-time messaging with optimistic send + delivery lifecycle
-- 👥 Contact list with online / last-seen presence
-- 🫧 Chat window with grouped message bubbles and day separators
-- 🔤 Text, emoji and file-sharing support
-- 🌗 Dark / Light mode toggle (persisted)
-- 📐 Responsive layout — single-pane on mobile, two-pane on desktop
-
-**UI / UX**
-- 🔍 Search for chats & contacts (sidebar) and within a conversation
-- ⌨️ Live typing indicators
-- ✓✓ Read receipts (single / double / blue double check marks)
-- 🖼 Profile-picture avatars with colored initials fallback
-- 🎞 Message send/receive animations
-
-**Extras**
-- 👨‍👩‍👧 Group chat creation
-- 🎤 Voice-message recording UI (visual only — no microphone access) with animated waveform playback
-- ↩️ Reply and ➡️ forward messages
-- 📌 Pinned messages section with a jump-to bar
-- 🗂 Per-chat pin/mute, message delete & copy
+> ⚠️ **You must supply your own Telegram API credentials** (`api_id` / `api_hash`). See setup below.
 
 ---
 
-## 🧱 Tech Stack
+## 1. Get your API credentials
 
-| Area        | Choice                                  |
-|-------------|------------------------------------------|
-| Framework   | React 18 + TypeScript                    |
-| Styling     | Tailwind CSS v3 (custom Telegram palette)|
-| Build tool  | Vite 5                                    |
-| Backend     | Firebase (Auth + Realtime DB) **or** built-in mock |
+1. Visit **https://my.telegram.org** and sign in with your phone number.
+2. Open **API development tools**.
+3. Create an app (any title / short name). You will receive:
+   - **`api_id`** — a number
+   - **`api_hash`** — a 32-character hex string
 
----
+## 2. Provide your API key
 
-## 🚀 Getting Started
+You have **two options**:
+
+**Option A — enter it in the app (easiest):** just run the app (step 3) and paste your
+`api_id` / `api_hash` on the welcome screen. They're saved in your browser
+(localStorage) and used immediately — no file editing or rebuild needed. You can
+change them later via “Use a different API key” on the login screen.
+
+**Option B — use a `.env` file:**
 
 ```bash
-# 1. Install dependencies
-npm install
+cp .env.example .env
+```
 
-# 2. Start the dev server (runs with the mock backend by default)
+Edit `.env`:
+
+```env
+VITE_TELEGRAM_API_ID=1234567
+VITE_TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef
+```
+
+In-app credentials (Option A) take precedence over `.env` when both are present.
+
+## 3. Install & run
+
+```bash
+npm install
 npm run dev
 ```
 
-Open the printed local URL. On the login screen, enter **any phone number** and use the verification code **`12345`** (shown as a hint in demo mode).
-
-> 💡 The mock backend persists to `localStorage` and simulates the other person reading your messages, typing, and replying — so the app feels alive without any server.
-
-### Production build
-
-```bash
-npm run build      # type-check + bundle to /dist
-npm run preview    # preview the production build
-```
+Open the printed URL (default http://localhost:5173).
 
 ---
 
-## 🔌 Using a real Firebase backend (optional)
+## Logging in
 
-1. Create a Firebase project and enable:
-   - **Authentication → Sign-in method → Phone**
-   - **Realtime Database**
-2. Copy `.env.example` to `.env` and fill in your config:
+### As a user
+1. Enter your phone number in international format (e.g. `+14155550123`).
+2. Telegram sends a login code (in the Telegram app or via SMS). Enter it.
+3. If you have **Two-Step Verification** enabled, enter your password — it's verified locally using SRP and never sent in plaintext.
 
-   ```bash
-   cp .env.example .env
-   ```
+### As a bot
+1. Switch to the **Login as Bot** tab.
+2. Paste a bot token from [@BotFather](https://t.me/BotFather) (e.g. `123456:ABC-DEF...`).
+3. You'll land on the **Bot Dashboard**: bot info, incoming updates, and the ability to reply, including rendering inline keyboards and handling callback queries.
 
-   ```env
-   VITE_FIREBASE_API_KEY=...
-   VITE_FIREBASE_AUTH_DOMAIN=...
-   VITE_FIREBASE_PROJECT_ID=...
-   VITE_FIREBASE_DATABASE_URL=...
-   VITE_FIREBASE_STORAGE_BUCKET=...
-   VITE_FIREBASE_MESSAGING_SENDER_ID=...
-   VITE_FIREBASE_APP_ID=...
-   ```
-
-3. Restart the dev server. The app auto-detects the credentials and uses Firebase.
-
-You can force a backend explicitly with `VITE_BACKEND=mock` or `VITE_BACKEND=firebase`.
-
-### Suggested Realtime Database structure
-
-```
-users/{uid}            -> User profile
-chats/{chatId}         -> Chat (memberIds[], pinnedMessageIds[])
-messages/{chatId}/{id} -> Message
-typing/{chatId}/{uid}  -> timestamp (presence === typing)
-reads/{chatId}/{uid}   -> last-read timestamp
-```
+You can switch between accounts from the account menu; each session is cached separately in IndexedDB.
 
 ---
 
-## 🗂 Project Structure
+## How it works
 
 ```
 src/
+├── lib/telegram/
+│   ├── client.ts      # GramJS TelegramClient factory + connection lifecycle
+│   ├── session.ts     # IndexedDB-backed StringSession persistence
+│   ├── auth.ts        # sendCode / signIn / 2FA (SRP) / bot login / logout
+│   ├── dialogs.ts     # fetch + normalize dialogs (chats, groups, channels)
+│   ├── messages.ts    # fetch/send messages, media download, ticks
+│   └── format.ts      # presence, time, entity helpers
+├── context/
+│   ├── TelegramContext.tsx  # client + account state + login methods
+│   └── ThemeContext.tsx     # dark-by-default theme
 ├── components/
-│   ├── auth/            # LoginPage (phone + code)
-│   ├── chat/            # ChatWindow, MessageList, MessageBubble, input, voice, emoji…
-│   ├── sidebar/         # Sidebar, ChatListItem, search, menus
-│   ├── modals/          # NewGroup, Profile, Forward, Info
-│   ├── common/          # Avatar, Modal, Icon set
-│   └── ChatApp.tsx      # Responsive two-pane shell
-├── context/             # Theme, Auth, Chat providers
-├── hooks/               # useChatMessages
-├── services/            # Backend abstraction (mock + firebase) + summary builder
-├── lib/                 # firebase init, utils, message preview
-├── data/                # mock seed users/chats/messages
-└── types/               # shared domain types
+│   ├── auth/          # LoginPanel (phone/code/2FA) + BotLogin tab
+│   ├── sidebar/       # DialogList, DialogItem, SearchBar, archived toggle
+│   ├── chat/          # ChatView, MessageList, MessageBubble, Composer, ticks
+│   ├── bot/           # BotDashboard, inline keyboards, callback handling
+│   └── common/        # Avatar, Icon, Spinner
+└── hooks/             # useDialogs, useMessages, useUpdates
 ```
 
-### Architecture note: the backend abstraction
-
-All UI talks to a single `Backend` interface (`src/services/backendTypes.ts`). Two implementations satisfy it:
-
-- `mockBackend` — in-browser, `localStorage`-persisted, simulates realtime.
-- `FirebaseBackend` — Firebase Auth + Realtime Database.
-
-`src/services/index.ts` picks one at startup, so swapping backends never touches component code.
+The UI talks only to the GramJS client; all data is fetched live from Telegram.
 
 ---
 
-## ⚠️ Notes & Limitations
+## Notes, limits & gotchas
 
-- The voice recorder is a **visual simulation** — it does not record audio.
-- File attachments are previewed locally via object URLs (not uploaded) in mock mode.
-- Phone auth in mock mode accepts any 5-digit code (canonical: `12345`).
+- **Browser MTProto**: GramJS connects over WebSocket. Node primitives (`Buffer`, `process`) are polyfilled via `vite-plugin-node-polyfills`.
+- **Rate limits**: Telegram returns `FLOOD_WAIT_X` errors; the client surfaces the wait time and the UI shows a friendly message. Don't spam the login endpoint.
+- **`api_id`/`api_hash`** live in the client bundle (unavoidable for any web client). Use credentials you're comfortable exposing; protect your 2FA password.
+- **Voice/video message recording** is presented as UI only (browser recording is out of scope); receiving/playing media works via the API.
+- **Stickers/GIFs**: emoji picker is fully functional; sticker/GIF panels are scaffolded against the API and documented inline where they need further wiring.
+- This is an educational client. Respect Telegram's [Terms of Service](https://telegram.org/tos) and API rules.
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|--------|-----|
+| `API_ID_INVALID` | Double-check `.env` values and restart `npm run dev`. |
+| Stuck "Connecting…" | Check network/WebSocket access; some networks block Telegram DCs. |
+| `PHONE_CODE_INVALID` | Re-request the code; codes expire quickly. |
+| `SESSION_PASSWORD_NEEDED` | Expected — it means 2FA is on; enter your password. |
+| Reset everything | Clear the site's IndexedDB (`telegram-web` database) and reload. |
